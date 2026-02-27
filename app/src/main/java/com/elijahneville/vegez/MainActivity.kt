@@ -1,20 +1,19 @@
 package com.elijahneville.vegez
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -33,6 +32,15 @@ class MainActivity : ComponentActivity() {
             VegezTheme {
                 val navController = rememberNavController()
                 val viewModel: VegetableViewModel = viewModel()
+                val context = LocalContext.current
+                val statusMessage by viewModel.statusMessage.collectAsState()
+
+                LaunchedEffect(statusMessage) {
+                    statusMessage?.let {
+                        Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                        viewModel.clearStatus()
+                    }
+                }
                 
                 NavHost(navController = navController, startDestination = "landing") {
                     composable("landing") { VegetableLandingScreen(navController) }
@@ -95,7 +103,6 @@ fun AddVegetableScreen(navController: NavController, viewModel: VegetableViewMod
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = {
                 viewModel.addVegetable(name, price.toDoubleOrNull() ?: 0.0)
-                navController.popBackStack()
             }, modifier = Modifier.fillMaxWidth()) { Text("Save") }
         }
     }
@@ -104,8 +111,7 @@ fun AddVegetableScreen(navController: NavController, viewModel: VegetableViewMod
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UpdateVegetableScreen(navController: NavController, viewModel: VegetableViewModel) {
-    val vegetables by viewModel.vegetables.collectAsState()
-    var selectedVeg by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
 
     Scaffold(
@@ -115,21 +121,14 @@ fun UpdateVegetableScreen(navController: NavController, viewModel: VegetableView
             })
         }
     ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding).padding(16.dp)) {
-            Text("Select Vegetable to Update:")
-            LazyColumn {
-                items(vegetables.keys.toList()) { name ->
-                    Button(onClick = { selectedVeg = name; price = vegetables[name].toString() }) { Text(name) }
-                }
-            }
-            if (selectedVeg.isNotEmpty()) {
-                Text("Updating: $selectedVeg")
-                OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("New Price") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                Button(onClick = {
-                    viewModel.updateVegetable(selectedVeg, price.toDoubleOrNull() ?: 0.0)
-                    navController.popBackStack()
-                }) { Text("Update") }
-            }
+        Column(modifier = Modifier.padding(innerPadding).padding(16.dp).fillMaxWidth()) {
+            OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Vegetable Name") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("New Price") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = {
+                viewModel.updateVegetable(name, price.toDoubleOrNull() ?: 0.0)
+            }, modifier = Modifier.fillMaxWidth()) { Text("Update") }
         }
     }
 }
@@ -137,23 +136,20 @@ fun UpdateVegetableScreen(navController: NavController, viewModel: VegetableView
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeleteVegetableScreen(navController: NavController, viewModel: VegetableViewModel) {
-    val vegetables by viewModel.vegetables.collectAsState()
+    var name by remember { mutableStateOf("") }
     Scaffold(
         topBar = { TopAppBar(title = { Text("Delete Vegetable") }, navigationIcon = {
             IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
         })}
     ) { innerPadding ->
-        LazyColumn(modifier = Modifier.padding(innerPadding)) {
-            items(vegetables.keys.toList()) { name ->
-                ListItem(
-                    headlineContent = { Text(name) },
-                    trailingContent = {
-                        IconButton(onClick = { viewModel.deleteVegetable(name) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete")
-                        }
-                    }
-                )
-            }
+        Column(modifier = Modifier.padding(innerPadding).padding(16.dp).fillMaxWidth()) {
+            OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Vegetable Name") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = { viewModel.deleteVegetable(name) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) { Text("Delete") }
         }
     }
 }
@@ -161,30 +157,27 @@ fun DeleteVegetableScreen(navController: NavController, viewModel: VegetableView
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalculateCostScreen(navController: NavController, viewModel: VegetableViewModel) {
-    val vegetables by viewModel.vegetables.collectAsState()
-    var selectedVeg by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
     var quantity by remember { mutableStateOf("") }
-    var result by remember { mutableStateOf<Double?>(null) }
+    val result by viewModel.calculatedCost.collectAsState()
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Calculate Cost") }, navigationIcon = {
             IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
         })}
     ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding).padding(16.dp)) {
-            Text("Select Vegetable:")
-            LazyColumn(modifier = Modifier.height(200.dp)) {
-                items(vegetables.keys.toList()) { name ->
-                    Button(onClick = { selectedVeg = name }) { Text(name) }
-                }
-            }
-            if (selectedVeg.isNotEmpty()) {
-                Text("Selected: $selectedVeg")
-                OutlinedTextField(value = quantity, onValueChange = { quantity = it }, label = { Text("Quantity") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                Button(onClick = {
-                    result = viewModel.calculateCost(selectedVeg, quantity.toDoubleOrNull() ?: 0.0)
-                }) { Text("Calculate") }
-                result?.let { Text("Total Cost: $it", style = MaterialTheme.typography.headlineSmall) }
+        Column(modifier = Modifier.padding(innerPadding).padding(16.dp).fillMaxWidth()) {
+            OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Vegetable Name") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(value = quantity, onValueChange = { quantity = it }, label = { Text("Quantity") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = {
+                viewModel.calculateCost(name, quantity.toDoubleOrNull() ?: 0.0)
+            }, modifier = Modifier.fillMaxWidth()) { Text("Calculate") }
+            
+            result?.let { 
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Total Cost: $$it", style = MaterialTheme.typography.headlineSmall) 
             }
         }
     }
@@ -193,23 +186,42 @@ fun CalculateCostScreen(navController: NavController, viewModel: VegetableViewMo
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrintReceiptScreen(navController: NavController, viewModel: VegetableViewModel) {
-    // For simplicity, we'll simulate a transaction receipt
+    var clerkId by remember { mutableStateOf("Admin") }
+    var name by remember { mutableStateOf("") }
+    var quantity by remember { mutableStateOf("") }
+    val receipt by viewModel.receiptData.collectAsState()
+
     Scaffold(
         topBar = { TopAppBar(title = { Text("Print Receipt") }, navigationIcon = {
             IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
         })}
     ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding).padding(16.dp)) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("VEGEZ RECEIPT", style = MaterialTheme.typography.titleLarge)
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-                    Text("Cashier: Admin (Logged In)")
-                    Text("Total Cost: $150.00")
-                    Text("Amount Given: $200.00")
-                    Text("Change Due: $50.00")
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-                    Text("Thank you for shopping!")
+        Column(modifier = Modifier.padding(innerPadding).padding(16.dp).fillMaxWidth()) {
+            OutlinedTextField(value = clerkId, onValueChange = { clerkId = it }, label = { Text("Cashier ID") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Vegetable Name") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(value = quantity, onValueChange = { quantity = it }, label = { Text("Quantity") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = {
+                viewModel.calculateReceipt(clerkId, name, quantity.toDoubleOrNull() ?: 0.0)
+            }, modifier = Modifier.fillMaxWidth()) { Text("Generate Receipt") }
+
+            receipt?.let {
+                Spacer(modifier = Modifier.height(24.dp))
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("VEGEZ OFFICIAL RECEIPT", style = MaterialTheme.typography.titleLarge)
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Text("Cashier: ${it.cashierName}")
+                        Text("Item: $name")
+                        Text("Quantity: $quantity")
+                        Text("Total Cost: $${it.totalCost}")
+                        Text("Amount Given: $${it.amountGiven}")
+                        Text("Change Due: $${it.changeDue}")
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Text("Thank you for shopping!")
+                    }
                 }
             }
         }

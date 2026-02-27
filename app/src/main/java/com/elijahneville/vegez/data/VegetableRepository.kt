@@ -1,38 +1,23 @@
 package com.elijahneville.vegez.data
 
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 class VegetableRepository {
-    private val _vegetables = MutableStateFlow<Map<String, Double>>(emptyMap())
-    val vegetables: StateFlow<Map<String, Double>> = _vegetables
+    private val api = Retrofit.Builder()
+        .baseUrl("http://10.0.2.2:8080/vegetable-rmi/") // Use 10.0.2.2 for Android Emulator to access localhost
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+        .create(VegetableApi::class.java)
 
-    fun addVegetable(name: String, price: Double) {
-        val current = _vegetables.value.toMutableMap()
-        current[name] = price
-        _vegetables.value = current
-    }
+    suspend fun addVegetable(name: String, price: Double) = api.addVegetable(name, price)
 
-    fun updateVegetable(name: String, price: Double) {
-        val current = _vegetables.value.toMutableMap()
-        if (current.containsKey(name)) {
-            current[name] = price
-            _vegetables.value = current
-        }
-    }
+    suspend fun updateVegetable(name: String, price: Double) = api.updateVegetable(name, price)
 
-    fun deleteVegetable(name: String) {
-        val current = _vegetables.value.toMutableMap()
-        current.remove(name)
-        _vegetables.value = current
-    }
+    suspend fun deleteVegetable(name: String) = api.deleteVegetable(name)
 
-    fun getPrice(name: String): Double? {
-        return _vegetables.value[name]
-    }
+    suspend fun calculateCost(name: String, quantity: Double) = api.getCost(name, quantity)
 
-    fun calculateCost(name: String, quantity: Double): Double? {
-        val price = getPrice(name)
-        return price?.let { it * quantity }
-    }
+    suspend fun calculateReceipt(clerkId: String, name: String, quantity: Double) = 
+        api.calculateReceipt(clerkId, name, quantity)
 }
